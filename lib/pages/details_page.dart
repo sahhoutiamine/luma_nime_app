@@ -30,6 +30,7 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
     _futureDetail = AnimeDetailScraper.fetchDetails(widget.url);
   }
 
+  // Helper function to get icon for info chips
   IconData _getIconForInfo(String label) {
     switch (label) {
       case 'النوع':
@@ -80,7 +81,6 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
           SizedBox(height: 16),
           Text(
             'جاري التحميل...',
-            // Colors.white70 is Colors.white.withAlpha((0.70 * 255).round())
             style: TextStyle(color: Colors.white.withAlpha(179), fontSize: 16),
           ),
         ],
@@ -486,171 +486,84 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
             ),
           ],
         ),
-        SizedBox(height: 16),
-        Container(
-          height: 190,
+        SizedBox(height: 12),
+        SizedBox(
+          height: 155, // Adjust this height as needed
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: anime.seasonImages.length,
             itemBuilder: (context, index) {
-              String? seasonUrl;
-              if (index < anime.seasonUrls.length && anime.seasonUrls[index].isNotEmpty) {
-                seasonUrl = anime.seasonUrls[index];
-              }
-              return _buildSeasonCard(
-                imageUrl: anime.seasonImages[index],
-                seasonNumber: index + 1,
-                seasonUrl: seasonUrl,
-                index: index,
+              final seasonUrl = anime.seasonUrls.length > index ? anime.seasonUrls[index] : '';
+              final seasonTitle = 'موسم ${index + 1}'; // Or use actual season name if available
+
+              return InkWell(
+                onTap: () {
+                  if (seasonUrl.isNotEmpty) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SeasonEpisodesPage(
+                          seasonTitle: seasonTitle,
+                          seasonUrl: seasonUrl,
+                        ),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('رابط الموسم غير متوفر أو غير صالح')),
+                    );
+                  }
+                },
+                child: Container(
+                  width: 100,
+                  margin: EdgeInsets.only(right: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 120,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha((0.4 * 255).round()), // 102
+                              blurRadius: 8,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(
+                            imageUrl: anime.seasonImages[index],
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(color: _cardBackgroundColor),
+                            errorWidget: (context, url, error) => Container(
+                              color: _cardBackgroundColor,
+                              child: Icon(Icons.image, color: Colors.grey),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        seasonTitle,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
               );
             },
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSeasonCard({
-    required String imageUrl,
-    required int seasonNumber,
-    String? seasonUrl,
-    required int index,
-  }) {
-    final bool hasValidUrl = seasonUrl != null && seasonUrl.isNotEmpty;
-
-    return Container(
-      width: 105,
-      margin: EdgeInsets.only(left: index == 0 ? 0 : 12, right: 4),
-      child: InkWell(
-        onTap: hasValidUrl
-            ? () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => SeasonEpisodesPage(
-                seasonTitle: 'الموسم $seasonNumber',
-                seasonUrl: seasonUrl!,
-              ),
-            ),
-          );
-        }
-            : null,
-        borderRadius: BorderRadius.circular(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 140,
-              width: 105,
-              decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: hasValidUrl ? _titleAndGenreColor : _cardBorderColor.withAlpha((0.5 * 255).round()), // 128
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withAlpha((0.3 * 255).round()), // 77
-                        blurRadius: 6,
-                        offset: Offset(2, 2))
-                  ]),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(7),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        color: _cardBackgroundColor,
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(_titleAndGenreColor),
-                            strokeWidth: 2.5,
-                          ),
-                        ),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        color: _cardBackgroundColor,
-                        child: Icon(Icons.image_search_outlined, color: Colors.grey[600], size: 30),
-                      ),
-                    ),
-                    if (!hasValidUrl)
-                      Container(
-                        color: Colors.black.withAlpha((0.6 * 255).round()), // 153
-                        child: Center(
-                          child: Icon(
-                            Icons.lock_outline,
-                            color: Colors.white.withAlpha((0.7 * 255).round()), // 179
-                            size: 30,
-                          ),
-                        ),
-                      ),
-                    if (hasValidUrl)
-                      Positioned(
-                        top: 5,
-                        right: 5,
-                        child: Container(
-                          padding: EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                              color: _titleAndGenreColor.withAlpha((0.9 * 255).round()), // 230
-                              shape: BoxShape.circle,
-                              boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 4)]),
-                          child: Icon(
-                            Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'الموسم $seasonNumber',
-              style: TextStyle(
-                color: Colors.white.withAlpha((0.9 * 255).round()), // 230
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              hasValidUrl ? 'متاح للعرض' : 'غير متاح بعد',
-              style: TextStyle(
-                  color: hasValidUrl ? _titleAndGenreColor.withAlpha((0.9 * 255).round()) : Colors.grey[500], // 230 for titleAndGenreColor
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Placeholder for SeasonEpisodesPage
-class SeasonEpisodesPage extends StatelessWidget {
-  final String seasonTitle;
-  final String seasonUrl;
-
-  const SeasonEpisodesPage({
-    Key? key,
-    required this.seasonTitle,
-    required this.seasonUrl,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(seasonTitle)),
-      body: Center(
-        child: Text('صفحة حلقات الموسم: $seasonTitle\nURL: $seasonUrl'),
-      ),
     );
   }
 }

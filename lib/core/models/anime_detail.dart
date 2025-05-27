@@ -1,7 +1,7 @@
 class AnimeDetail {
   final String title;
   final String imageUrl;
-  final String bannerUrl; // تمت الإضافة هنا
+  final String bannerUrl;
   final String status;
   final String type;
   final String releaseYear;
