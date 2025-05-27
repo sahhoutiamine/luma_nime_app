@@ -38,6 +38,8 @@ dependencies:
   flutter_bloc: ^9.1.1
   json_serializable: ^6.9.5
   cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+
 
 
 
