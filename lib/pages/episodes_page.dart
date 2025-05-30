@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:luma_nome_app/pages/player_page.dart';
@@ -146,61 +148,75 @@ class _SeasonEpisodesPageState extends State<SeasonEpisodesPage> {
   }
 
   Future<void> _navigateToVideoPlayer(Episode episode, VideoServer server) async {
-    // عرض مؤشر التحميل
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
-        return const AlertDialog(
-          backgroundColor: _backgroundColor,
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text(
-                'جاري تحضير الفيديو...',
-                style: TextStyle(color: Colors.white),
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (context) => AlertDialog(
+        backgroundColor: _backgroundColor,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              'جاري تحضير الفيديو من خادم ${server.name}...',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+      ),
     );
 
     try {
-      // الحصول على رابط الفيديو الفعلي
       final videoUrl = await VideoScraperService.getVideoUrl(
-        episode.url,
-        server.serverId,
-        server.type,
-        server.postId,
-      );
+        episodeUrl: episode.url,
+        serverId: server.serverId,
+        type: server.type,
+        postId: server.postId,
+      ).timeout(const Duration(seconds: 30));
 
-      // إغلاق مؤشر التحميل
-      Navigator.pop(context);
+      if (!mounted) return;
+      Navigator.pop(context); // إغلاق نافذة التحميل
 
-      if (videoUrl != null && videoUrl.isNotEmpty) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => VideoPlayerPage(
-              videoUrl: videoUrl,
-              episodeTitle: episode.title,
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تعذر الحصول على رابط الفيديو')),
-        );
+      if (videoUrl == null || videoUrl.isEmpty) {
+        throw Exception('تعذر العثور على رابط تشغيل صالح');
       }
-    } catch (e) {
-      // إغلاق مؤشر التحميل في حالة الخطأ
+
+      if (!videoUrl.startsWith('http')) {
+        throw Exception('رابط الفيديو غير صالح');
+      }
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoPlayerPage(
+            videoUrl: videoUrl,
+            episodeTitle: episode.title,
+            serverName: server.name,
+          ),
+        ),
+      );
+    } on TimeoutException {
+      if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في تحضير الفيديو: ${e.toString()}')),
+        const SnackBar(content: Text('انتهى الوقت المحدد للاتصال بالخادم')),
       );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('فشل التشغيل: ${e.toString()}'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+
+      // إعادة المحاولة تلقائياً بعد 3 ثواني
+      await Future.delayed(const Duration(seconds: 3));
+      if (mounted) {
+        _showServerOptions(context, episode);
+      }
     }
   }
 

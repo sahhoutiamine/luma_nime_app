@@ -2,14 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:luma_nome_app/core/models/server_player.dart';
 
 class VideoPlayerPage extends StatefulWidget {
   final String videoUrl;
   final String episodeTitle;
+  final String? serverName;
+  final List<VideoServer>? alternativeServers;
+  final Function(VideoServer)? onServerChanged;
 
   const VideoPlayerPage({
     required this.videoUrl,
     required this.episodeTitle,
+    this.serverName,
+    this.alternativeServers,
+    this.onServerChanged,
     Key? key,
   }) : super(key: key);
 
@@ -24,12 +31,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   bool _hasError = false;
   String _errorMessage = '';
   bool _isFullScreen = false;
+  bool _showServerOptions = false;
 
   @override
   void initState() {
     super.initState();
     _initializePlayer();
-    // إخفاء شريط الحالة والتنقل في وضع ملء الشاشة
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
@@ -42,19 +49,22 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         _hasError = false;
       });
 
-      // إنشاء مشغل الفيديو
+      // تحديد نوع الفيديو بناء على الرابط
+      final formatHint = widget.videoUrl.contains('.m3u8')
+          ? VideoFormat.hls
+          : (widget.videoUrl.contains('.mpd') ? VideoFormat.dash : null);
+
       _videoPlayerController = VideoPlayerController.networkUrl(
         Uri.parse(widget.videoUrl),
+        formatHint: formatHint,
         httpHeaders: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Referer': 'https://web.animerco.org/',
         },
       );
 
-      // تهيئة مشغل الفيديو
       await _videoPlayerController.initialize();
 
-      // إنشاء مشغل Chewie
       _chewieController = ChewieController(
         videoPlayerController: _videoPlayerController,
         autoPlay: true,
@@ -72,52 +82,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         placeholder: Container(
           color: Colors.black,
           child: const Center(
-            child: CircularProgressIndicator(
-              color: Colors.blue,
-            ),
+            child: CircularProgressIndicator(color: Colors.blue),
           ),
         ),
         autoInitialize: true,
         errorBuilder: (context, errorMessage) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.error,
-                  color: Colors.red,
-                  size: 64,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'خطأ في تشغيل الفيديو',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  errorMessage,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => _retryInitialization(),
-                  child: const Text('إعادة المحاولة'),
-                ),
-              ],
-            ),
-          );
+          return _buildErrorWidget(errorMessage);
         },
+        customControls: const CupertinoControls(
+          backgroundColor: Color.fromRGBO(41, 41, 41, 0.7),
+          iconColor: Colors.white,
+        ),
       );
 
-      // الاستماع لتغييرات الشاشة الكاملة
       _chewieController!.addListener(_chewieListener);
 
       setState(() {
@@ -144,16 +121,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         });
 
         if (isFullScreen) {
-          // في وضع ملء الشاشة - إخفاء شريط الحالة
           SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
           SystemChrome.setPreferredOrientations([
             DeviceOrientation.landscapeLeft,
             DeviceOrientation.landscapeRight,
           ]);
         } else {
-          // في الوضع العادي - إظهار شريط الحالة
-          SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
-              overlays: SystemUiOverlay.values);
+          SystemChrome.setEnabledSystemUIMode(
+            SystemUiMode.manual,
+            overlays: SystemUiOverlay.values,
+          );
           SystemChrome.setPreferredOrientations([
             DeviceOrientation.portraitUp,
           ]);
@@ -177,9 +154,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   void dispose() {
     _dispose();
-    // استعادة الإعدادات الأصلية
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
-        overlays: SystemUiOverlay.values);
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
     ]);
@@ -204,13 +182,27 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          if (widget.alternativeServers != null &&
+              widget.alternativeServers!.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.swap_horiz),
+              onPressed: () => setState(() {
+                _showServerOptions = !_showServerOptions;
+              }),
+            ),
           IconButton(
             icon: const Icon(Icons.info_outline),
-            onPressed: () => _showVideoInfo(),
+            onPressed: _showVideoInfo,
           ),
         ],
       ),
-      body: _buildBody(),
+      body: Stack(
+        children: [
+          _buildBody(),
+          if (_showServerOptions && widget.alternativeServers != null)
+            _buildServerOptions(),
+        ],
+      ),
     );
   }
 
@@ -218,81 +210,20 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     if (_isLoading) {
       return const Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(
-              color: Colors.blue,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'جاري تحميل الفيديو...',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.blue),
+              SizedBox(height: 16),
+              Text(
+                'جاري تحميل الفيديو...',
+                style: TextStyle(color: Colors.white, fontSize: 16),
               ),
-            ),
-          ],
-        ),
+            ]),
       );
     }
 
     if (_hasError) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                color: Colors.red,
-                size: 64,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'تعذر تحميل الفيديو',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _errorMessage,
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 14,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton(
-                    onPressed: () => _retryInitialization(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('إعادة المحاولة'),
-                  ),
-                  const SizedBox(width: 16),
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white),
-                    ),
-                    child: const Text('العودة'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildErrorWidget(_errorMessage);
     }
 
     if (_chewieController != null) {
@@ -305,9 +236,114 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }
 
     return const Center(
-      child: Text(
-        'خطأ غير متوقع',
-        style: TextStyle(color: Colors.white),
+      child: Text('خطأ غير متوقع', style: TextStyle(color: Colors.white)),
+    );
+  }
+
+  Widget _buildErrorWidget(String errorMessage) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 64),
+            const SizedBox(height: 16),
+            const Text(
+              'تعذر تحميل الفيديو',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (widget.serverName != null)
+              Text(
+                'الخادم: ${widget.serverName}',
+                style: const TextStyle(color: Colors.grey),
+              ),
+            const SizedBox(height: 8),
+            Text(
+              errorMessage,
+              style: const TextStyle(color: Colors.grey, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: _retryInitialization,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('إعادة المحاولة'),
+                ),
+                const SizedBox(width: 16),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white),
+                  ),
+                  child: const Text('العودة'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServerOptions() {
+    return Positioned(
+      top: 80,
+      right: 20,
+      left: 20,
+      child: Material(
+        color: const Color(0xFF14152A),
+        borderRadius: BorderRadius.circular(8),
+        elevation: 8,
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'اختر خادم تشغيل آخر:',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...widget.alternativeServers!.map((server) {
+                return ListTile(
+                  leading: const Icon(Icons.play_circle_fill, color: Colors.blue),
+                  title: Text(
+                    server.name,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  subtitle: Text(
+                    'نوع الخادم: ${server.type}',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                  onTap: () {
+                    setState(() {
+                      _showServerOptions = false;
+                    });
+                    if (widget.onServerChanged != null) {
+                      widget.onServerChanged!(server);
+                    }
+                  },
+                );
+              }).toList(),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -319,26 +355,35 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         return AlertDialog(
           backgroundColor: const Color(0xFF14152A),
           title: const Text(
-            'معلومات الفيديو',
+            'معلومات الحلقة',
             style: TextStyle(color: Colors.white),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildInfoRow('العنوان:', widget.episodeTitle),
-              _buildInfoRow('الرابط:', widget.videoUrl),
-              if (_videoPlayerController.value.isInitialized) ...[
-                _buildInfoRow(
-                  'المدة:',
-                  _formatDuration(_videoPlayerController.value.duration),
-                ),
-                _buildInfoRow(
-                  'الأبعاد:',
-                  '${_videoPlayerController.value.size.width.toInt()}x${_videoPlayerController.value.size.height.toInt()}',
-                ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildInfoRow('العنوان:', widget.episodeTitle),
+                if (widget.serverName != null)
+                  _buildInfoRow('الخادم:', widget.serverName!),
+                _buildInfoRow('رابط التشغيل:', widget.videoUrl),
+                if (_videoPlayerController.value.isInitialized) ...[
+                  _buildInfoRow(
+                    'المدة:',
+                    _formatDuration(_videoPlayerController.value.duration),
+                  ),
+                  _buildInfoRow(
+                    'الجودة:',
+                    _getVideoQuality(_videoPlayerController.value.size),
+                  ),
+                ],
+                if (widget.alternativeServers != null)
+                  _buildInfoRow(
+                    'الخوادم المتاحة:',
+                    widget.alternativeServers!.length.toString(),
+                  ),
               ],
-            ],
+            ),
           ),
           actions: [
             TextButton(
@@ -369,7 +414,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
+            child: SelectableText(
               value,
               style: const TextStyle(color: Colors.white),
             ),
@@ -389,5 +434,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     } else {
       return "$twoDigitMinutes:$twoDigitSeconds";
     }
+  }
+
+  String _getVideoQuality(Size size) {
+    final height = size.height;
+    if (height >= 1080) return 'FHD (1080p)';
+    if (height >= 720) return 'HD (720p)';
+    if (height >= 480) return 'SD (480p)';
+    return '${height.toInt()}p';
   }
 }

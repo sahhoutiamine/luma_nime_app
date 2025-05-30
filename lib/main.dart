@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:luma_nome_app/pages/home_page.dart';
+import 'package:luma_nome_app/splash_page.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -12,12 +12,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      home: SplashScreen(),
       theme: ThemeData(
-
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        fontFamily: 'Roboto',
+        scaffoldBackgroundColor: const Color(0xFF121215),
       ),
-      home: HomePage(),
     );
   }
 }
-

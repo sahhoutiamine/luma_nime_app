@@ -1,156 +1,16 @@
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as parser;
-import '../models/server_player.dart';
 import 'dart:convert';
+import '../models/server_player.dart';
 
 class VideoScraperService {
   static const String baseUrl = 'https://web.animerco.org';
 
   static Future<List<VideoServer>> fetchVideoServers(String episodeUrl) async {
+    final client = http.Client();
     try {
-      print('Fetching servers from: $episodeUrl');
-
-      final response = await http.get(
+      final response = await client.get(
         Uri.parse(episodeUrl),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'ar,en-US;q=0.7,en;q=0.3',
-          'Accept-Encoding': 'gzip, deflate',
-          'DNT': '1',
-          'Connection': 'keep-alive',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final document = parser.parse(response.body);
-        final List<VideoServer> servers = [];
-
-        // البحث عن الخوادم في عدة أماكن محتملة
-        final serverSelectors = [
-          '.server-list li a',
-          '.servers-list li a',
-          '.episode-servers li a',
-          'ul.list-server-items li a',
-          '.player-servers li a',
-        ];
-
-        for (String selector in serverSelectors) {
-          final serverElements = document.querySelectorAll(selector);
-
-          if (serverElements.isNotEmpty) {
-            print('Found ${serverElements.length} servers with selector: $selector');
-
-            for (var element in serverElements) {
-              final serverName = element.querySelector('.server')?.text.trim() ??
-                  element.text.trim() ??
-                  'Unknown Server';
-
-              final serverId = element.attributes['data-nume'] ??
-                  element.attributes['data-server'] ??
-                  element.attributes['data-id'] ??
-                  '';
-
-              final type = element.attributes['data-type'] ??
-                  element.attributes['data-server-type'] ??
-                  'direct';
-
-              final postId = element.attributes['data-post'] ??
-                  element.attributes['data-episode'] ??
-                  '';
-
-              final href = element.attributes['href'] ?? '';
-
-              if (serverName.isNotEmpty && (serverId.isNotEmpty || href.isNotEmpty)) {
-                servers.add(VideoServer(
-                  name: serverName,
-                  serverId: serverId.isNotEmpty ? serverId : href,
-                  type: type,
-                  postId: postId,
-                ));
-              }
-            }
-
-            if (servers.isNotEmpty) break; // إذا وجدنا خوادم، توقف عن البحث
-          }
-        }
-
-        // إذا لم نجد خوادم، حاول طريقة أخرى
-        if (servers.isEmpty) {
-          // البحث عن أزرار التشغيل
-          final playButtons = document.querySelectorAll('button[data-server], a[data-server], .play-btn');
-
-          for (var button in playButtons) {
-            final serverName = button.text.trim();
-            final serverId = button.attributes['data-server'] ??
-                button.attributes['data-nume'] ??
-                button.attributes['href'] ?? '';
-
-            if (serverName.isNotEmpty && serverId.isNotEmpty) {
-              servers.add(VideoServer(
-                name: serverName,
-                serverId: serverId,
-                type: 'direct',
-                postId: '',
-              ));
-            }
-          }
-        }
-
-        // إضافة خادم افتراضي إذا لم نجد أي خوادم
-        if (servers.isEmpty) {
-          servers.add(VideoServer(
-            name: 'خادم افتراضي',
-            serverId: 'default',
-            type: 'direct',
-            postId: '',
-          ));
-        }
-
-        print('Found ${servers.length} servers total');
-        return servers;
-      } else {
-        print('Failed to fetch servers. Status code: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error fetching video servers: $e');
-    }
-
-    return [];
-  }
-
-  static Future<String?> getVideoUrl(
-      String episodeUrl,
-      String serverId,
-      String type,
-      String postId
-      ) async {
-    try {
-      print('Getting video URL for server: $serverId, type: $type');
-
-      // إذا كان serverId يحتوي على رابط مباشر
-      if (serverId.startsWith('http')) {
-        return await _extractDirectVideoUrl(serverId);
-      }
-
-      // إذا كان لدينا معرف الخادم والنوع
-      if (serverId.isNotEmpty && type.isNotEmpty) {
-        return await _getVideoUrlByAjax(episodeUrl, serverId, type, postId);
-      }
-
-      // محاولة استخراج الفيديو من الصفحة مباشرة
-      return await _extractVideoFromPage(episodeUrl);
-
-    } catch (e) {
-      print('Error getting video URL: $e');
-      return null;
-    }
-  }
-
-  static Future<String?> _extractDirectVideoUrl(String videoPageUrl) async {
-    try {
-      final response = await http.get(
-        Uri.parse(videoPageUrl),
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Referer': baseUrl,
@@ -159,47 +19,55 @@ class VideoScraperService {
 
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
+        final servers = <VideoServer>[];
 
-        // البحث عن عنصر الفيديو
-        final videoElement = document.querySelector('video source, video');
-        if (videoElement != null) {
-          final src = videoElement.attributes['src'];
-          if (src != null && src.isNotEmpty) {
-            return _makeAbsoluteUrl(src, videoPageUrl);
+        // الطريقة الأساسية لاستخراج الخوادم
+        final serverItems = document.querySelectorAll('.server-list li a.option');
+        for (final item in serverItems) {
+          servers.add(VideoServer(
+            name: item.querySelector('.server')?.text.trim() ?? 'غير معروف',
+            serverId: item.attributes['data-nume'] ?? '',
+            type: item.attributes['data-type'] ?? 'tv',
+            postId: item.attributes['data-post'] ?? '',
+          ));
+        }
+
+        // طريقة احتياطية إذا لم توجد خوادم
+        if (servers.isEmpty) {
+          final backupItems = document.querySelectorAll('a[data-server]');
+          for (final item in backupItems) {
+            servers.add(VideoServer(
+              name: item.text.trim(),
+              serverId: item.attributes['data-server'] ?? '',
+              type: item.attributes['data-type'] ?? 'tv',
+              postId: item.attributes['data-post'] ?? '',
+            ));
           }
         }
 
-        // البحث في iframe
-        final iframe = document.querySelector('iframe');
-        if (iframe != null) {
-          final src = iframe.attributes['src'];
-          if (src != null && src.isNotEmpty) {
-            return await _extractVideoFromIframe(_makeAbsoluteUrl(src, videoPageUrl));
-          }
-        }
+        return servers;
       }
     } catch (e) {
-      print('Error extracting direct video URL: $e');
+      print('حدث خطأ في جلب الخوادم: $e');
+    } finally {
+      client.close();
     }
-
-    return null;
+    return [];
   }
 
-  static Future<String?> _getVideoUrlByAjax(
-      String episodeUrl,
-      String serverId,
-      String type,
-      String postId
-      ) async {
+  static Future<String?> getVideoUrl({
+    required String episodeUrl,
+    required String serverId,
+    required String type,
+    required String postId,
+  }) async {
+    final client = http.Client();
     try {
-      // محاولة الحصول على الفيديو عبر AJAX
-      final ajaxUrl = '$baseUrl/wp-admin/admin-ajax.php';
-
-      final response = await http.post(
-        Uri.parse(ajaxUrl),
+      // المحاولة الأولى: استخدام API الموقع
+      final apiResponse = await client.post(
+        Uri.parse('$baseUrl/wp-admin/admin-ajax.php'),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Referer': episodeUrl,
           'X-Requested-With': 'XMLHttpRequest',
         },
@@ -211,93 +79,73 @@ class VideoScraperService {
         },
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+      if (apiResponse.statusCode == 200) {
+        final data = jsonDecode(apiResponse.body);
 
+        // تحليل الرد لاستخراج الرابط
         if (data['embed_url'] != null) {
-          return await _extractVideoFromIframe(data['embed_url']);
+          return await _resolveEmbedUrl(data['embed_url']);
         }
 
-        if (data['type'] == 'video' && data['result'] != null) {
-          return data['result'];
+        if (data['embed'] != null) {
+          return await _resolveEmbedUrl(data['embed']);
+        }
+
+        if (data['url'] != null) {
+          return data['url'];
         }
       }
-    } catch (e) {
-      print('Error getting video URL by AJAX: $e');
-    }
 
+      // المحاولة الثانية: البحث مباشرة في الصفحة
+      return await _extractDirectVideoUrl(episodeUrl);
+    } catch (e) {
+      print('حدث خطأ في جلب رابط الفيديو: $e');
+    } finally {
+      client.close();
+    }
     return null;
   }
 
-  static Future<String?> _extractVideoFromPage(String episodeUrl) async {
+  static Future<String?> _resolveEmbedUrl(String embedUrl) async {
     try {
-      final response = await http.get(
+      // إذا كان الرابط يحتوي على mp4 أو m3u8 مباشرة
+      if (embedUrl.contains('.mp4') || embedUrl.contains('.m3u8')) {
+        return embedUrl;
+      }
+
+      // إذا كان iframe نحتاج لاستخراج الرابط منه
+      final client = http.Client();
+      try {
+        final response = await client.get(
+          Uri.parse(embedUrl),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': baseUrl,
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final regex = RegExp(
+            r'(https?:\/\/[^\s"]*\.(?:m3u8|mp4)[^\s"]*)',
+            caseSensitive: false,
+          );
+          final match = regex.firstMatch(response.body);
+          return match?.group(1);
+        }
+      } finally {
+        client.close();
+      }
+    } catch (e) {
+      print('حدث خطأ في تحليل الرابط المضمن: $e');
+    }
+    return null;
+  }
+
+  static Future<String?> _extractDirectVideoUrl(String episodeUrl) async {
+    final client = http.Client();
+    try {
+      final response = await client.get(
         Uri.parse(episodeUrl),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final document = parser.parse(response.body);
-
-        // البحث عن روابط الفيديو في الصفحة
-        final videoSelectors = [
-          'video source[src]',
-          'video[src]',
-          'iframe[src*="player"]',
-          'iframe[src*="embed"]',
-          '.video-player iframe',
-          '#player iframe',
-        ];
-
-        for (String selector in videoSelectors) {
-          final element = document.querySelector(selector);
-          if (element != null) {
-            final src = element.attributes['src'];
-            if (src != null && src.isNotEmpty) {
-              if (src.contains('.mp4') || src.contains('.m3u8')) {
-                return _makeAbsoluteUrl(src, episodeUrl);
-              } else {
-                // إذا كان iframe، حاول استخراج الفيديو منه
-                return await _extractVideoFromIframe(_makeAbsoluteUrl(src, episodeUrl));
-              }
-            }
-          }
-        }
-
-        // البحث في JavaScript للحصول على روابط الفيديو
-        final scriptTags = document.querySelectorAll('script');
-        for (var script in scriptTags) {
-          final content = script.text;
-
-          // البحث عن أنماط روابط الفيديو الشائعة
-          final videoUrlPatterns = [
-            RegExp(r'"(https?://[^"]*\.mp4[^"]*)"'),
-            RegExp(r'"(https?://[^"]*\.m3u8[^"]*)"'),
-            RegExp(r"'(https?://[^']*\.mp4[^']*)'"),
-            RegExp(r"'(https?://[^']*\.m3u8[^']*)'"),
-          ];
-
-          for (var pattern in videoUrlPatterns) {
-            final match = pattern.firstMatch(content);
-            if (match != null) {
-              return match.group(1);
-            }
-          }
-        }
-      }
-    } catch (e) {
-      print('Error extracting video from page: $e');
-    }
-
-    return null;
-  }
-
-  static Future<String?> _extractVideoFromIframe(String iframeUrl) async {
-    try {
-      final response = await http.get(
-        Uri.parse(iframeUrl),
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Referer': baseUrl,
@@ -307,52 +155,30 @@ class VideoScraperService {
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
 
-        // البحث عن عنصر الفيديو في iframe
-        final videoElement = document.querySelector('video source, video');
-        if (videoElement != null) {
-          final src = videoElement.attributes['src'];
+        // البحث عن iframes
+        final iframes = document.querySelectorAll('iframe');
+        for (final iframe in iframes) {
+          final src = iframe.attributes['src'];
           if (src != null && src.isNotEmpty) {
-            return _makeAbsoluteUrl(src, iframeUrl);
+            final videoUrl = await _resolveEmbedUrl(src);
+            if (videoUrl != null) return videoUrl;
           }
         }
 
-        // البحث في JavaScript
-        final scriptTags = document.querySelectorAll('script');
-        for (var script in scriptTags) {
-          final content = script.text;
-
-          final videoUrlPatterns = [
-            RegExp(r'"(https?://[^"]*\.mp4[^"]*)"'),
-            RegExp(r'"(https?://[^"]*\.m3u8[^"]*)"'),
-            RegExp(r"'(https?://[^']*\.mp4[^']*)'"),
-            RegExp(r"'(https?://[^']*\.m3u8[^']*)'"),
-          ];
-
-          for (var pattern in videoUrlPatterns) {
-            final match = pattern.firstMatch(content);
-            if (match != null) {
-              return match.group(1);
-            }
+        // البحث عن عناصر فيديو مباشرة
+        final videoElements = document.querySelectorAll('video');
+        for (final video in videoElements) {
+          final src = video.attributes['src'];
+          if (src != null && src.isNotEmpty) {
+            return src;
           }
         }
       }
     } catch (e) {
-      print('Error extracting video from iframe: $e');
+      print('حدث خطأ في استخراج الفيديو مباشرة: $e');
+    } finally {
+      client.close();
     }
-
     return null;
-  }
-
-  static String _makeAbsoluteUrl(String url, String baseUrl) {
-    if (url.startsWith('http')) {
-      return url;
-    }
-
-    final base = Uri.parse(baseUrl);
-    if (url.startsWith('/')) {
-      return '${base.scheme}://${base.host}$url';
-    } else {
-      return '${base.scheme}://${base.host}${base.path.substring(0, base.path.lastIndexOf('/') + 1)}$url';
-    }
   }
 }
