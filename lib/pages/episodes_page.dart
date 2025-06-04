@@ -1,19 +1,17 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:luma_nome_app/pages/player_page.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:luma_nome_app/core/models/anime_episodes.dart';
-import '../core/models/server_player.dart';
-import '../core/services/anime_episode_video_scraper_service.dart';
-import '../core/services/anime_episodes_scraper_service.dart';
+import 'package:luma_nome_app/core/services/anime_episodes_scraper_service.dart';
 
-const Color _appBarColor = Color(0xFF14152A);
 const Color _backgroundColor = Color(0xFF121215);
+const Color _appBarColor = Color(0xFF14152A);
 const Color _cardBackgroundColor = Color(0xCA393939);
+const Color _cardBorderColor = Color(0xFF7C4CFE);
 const Color _shimmerBaseColor = Color(0xFF1E1E1E);
 const Color _shimmerHighlightColor = Color(0xFF2D2D2D);
+const Color _downloadButtonColor = Color(0xFF4CAF50);
 
 class SeasonEpisodesPage extends StatefulWidget {
   final String seasonTitle;
@@ -31,192 +29,32 @@ class SeasonEpisodesPage extends StatefulWidget {
 
 class _SeasonEpisodesPageState extends State<SeasonEpisodesPage> {
   late Future<List<Episode>> _futureEpisodes;
+  late Future<String?> _futureDownloadUrl;
+  bool _sortDescending = false;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _futureEpisodes = SeasonScraperService.fetchSeasonEpisodes(widget.seasonUrl);
+    _futureEpisodes = EpisodeScraper.fetchEpisodes(widget.seasonUrl);
+    _futureDownloadUrl = EpisodeScraper.fetchDownloadAllUrl(widget.seasonUrl);
   }
 
-  void _showServerOptions(BuildContext context, Episode episode) async {
-    // عرض مؤشر التحميل
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return const Center(
-          child: CircularProgressIndicator(),
-        );
-      },
-    );
-
-    try {
-      final servers = await VideoScraperService.fetchVideoServers(episode.url);
-
-      // إغلاق مؤشر التحميل
-      Navigator.pop(context);
-
-      if (servers.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('لا توجد خوادم متاحة لهذه الحلقة')),
-        );
-        return;
-      }
-
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: _backgroundColor,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        builder: (context) {
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[400],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'اختر خادم التشغيل',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.4,
-                  ),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: servers.length,
-                    itemBuilder: (context, index) {
-                      final server = servers[index];
-                      return Card(
-                        color: _cardBackgroundColor,
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        child: ListTile(
-                          leading: const Icon(
-                            Icons.play_circle_fill,
-                            color: Colors.blue,
-                          ),
-                          title: Text(
-                            server.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          subtitle: Text(
-                            'نوع الخادم: ${server.type}',
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 12,
-                            ),
-                          ),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            await _navigateToVideoPlayer(episode, server);
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    } catch (e) {
-      // إغلاق مؤشر التحميل في حالة الخطأ
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في جلب الخوادم: ${e.toString()}')),
-      );
-    }
+  void _refreshEpisodes() {
+    setState(() {
+      _futureEpisodes = EpisodeScraper.fetchEpisodes(widget.seasonUrl);
+    });
   }
 
-  Future<void> _navigateToVideoPlayer(Episode episode, VideoServer server) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: _backgroundColor,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(
-              'جاري تحضير الفيديو من خادم ${server.name}...',
-              style: const TextStyle(color: Colors.white),
-            ),
-          ],
-        ),
-      ),
-    );
-
+  int _extractEpisodeNumber(String title) {
     try {
-      final videoUrl = await VideoScraperService.getVideoUrl(
-        episodeUrl: episode.url,
-        serverId: server.serverId,
-        type: server.type,
-        postId: server.postId,
-      ).timeout(const Duration(seconds: 30));
-
-      if (!mounted) return;
-      Navigator.pop(context); // إغلاق نافذة التحميل
-
-      if (videoUrl == null || videoUrl.isEmpty) {
-        throw Exception('تعذر العثور على رابط تشغيل صالح');
+      final match = RegExp(r'\d+').firstMatch(title);
+      if (match != null) {
+        return int.parse(match.group(0)!);
       }
-
-      if (!videoUrl.startsWith('http')) {
-        throw Exception('رابط الفيديو غير صالح');
-      }
-
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoPlayerPage(
-            videoUrl: videoUrl,
-            episodeTitle: episode.title,
-            serverName: server.name,
-          ),
-        ),
-      );
-    } on TimeoutException {
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('انتهى الوقت المحدد للاتصال بالخادم')),
-      );
+      return 0;
     } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('فشل التشغيل: ${e.toString()}'),
-          duration: const Duration(seconds: 5),
-        ),
-      );
-
-      // إعادة المحاولة تلقائياً بعد 3 ثواني
-      await Future.delayed(const Duration(seconds: 3));
-      if (mounted) {
-        _showServerOptions(context, episode);
-      }
+      return 0;
     }
   }
 
@@ -225,89 +63,65 @@ class _SeasonEpisodesPageState extends State<SeasonEpisodesPage> {
     return Scaffold(
       backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: Text(
-          widget.seasonTitle,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: Text(widget.seasonTitle),
         backgroundColor: _appBarColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(_sortDescending ? Icons.arrow_downward : Icons.arrow_upward),
+            onPressed: () {
+              setState(() {
+                _sortDescending = !_sortDescending;
+              });
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _refreshEpisodes,
+          ),
+        ],
       ),
-      body: FutureBuilder<List<Episode>>(
-        future: _futureEpisodes,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return _buildShimmerLoading();
-          }
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          Expanded(
+            child: FutureBuilder<List<Episode>>(
+              future: _futureEpisodes,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return _buildShimmerLoading();
+                }
+                if (snapshot.hasError) {
+                  return _buildErrorScreen();
+                }
+                final episodes = snapshot.data!;
+                return _buildEpisodesList(episodes);
+              },
+            ),
+          ),
+          _buildDownloadAllButton(),
+        ],
+      ),
+    );
+  }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    color: Colors.red,
-                    size: 64,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'حدث خطأ في جلب الحلقات',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    snapshot.error.toString(),
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 14,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _futureEpisodes = SeasonScraperService.fetchSeasonEpisodes(widget.seasonUrl);
-                      });
-                    },
-                    child: const Text('إعادة المحاولة'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final episodes = snapshot.data!;
-          if (episodes.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.movie_outlined,
-                    color: Colors.grey,
-                    size: 64,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'لا توجد حلقات متاحة',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return _buildEpisodesList(episodes);
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: 'بحث...',
+          prefixIcon: Icon(Icons.search),
+          filled: true,
+          fillColor: _cardBackgroundColor,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+        ),
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value.toLowerCase();
+          });
         },
       ),
     );
@@ -315,57 +129,17 @@ class _SeasonEpisodesPageState extends State<SeasonEpisodesPage> {
 
   Widget _buildShimmerLoading() {
     return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: 6,
+      itemCount: 8,
       itemBuilder: (context, index) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 0.0, vertical: 4),
-          child: Shimmer.fromColors(
-            baseColor: _shimmerBaseColor,
-            highlightColor: _shimmerHighlightColor,
-            child: Card(
+        return Shimmer.fromColors(
+          baseColor: _shimmerBaseColor,
+          highlightColor: _shimmerHighlightColor,
+          child: Container(
+            height: 80,
+            margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
               color: _cardBackgroundColor,
-              child: SizedBox(
-                height: 120,
-                child: Padding(
-                  padding: const EdgeInsets.all(0),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade800,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(8),
-                            bottomLeft: Radius.circular(8),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              height: 20,
-                              width: double.infinity,
-                              color: Colors.grey.shade800,
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              height: 16,
-                              width: 150,
-                              color: Colors.grey.shade800,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              borderRadius: BorderRadius.circular(8),
             ),
           ),
         );
@@ -373,112 +147,215 @@ class _SeasonEpisodesPageState extends State<SeasonEpisodesPage> {
     );
   }
 
+  Widget _buildErrorScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, color: Colors.red, size: 48),
+          SizedBox(height: 16),
+          Text(
+            'حدث خطأ في جلب الحلقات',
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
+          SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _refreshEpisodes,
+            child: Text('إعادة المحاولة'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEpisodesList(List<Episode> episodes) {
+    // تصفية الحلقات حسب البحث
+    final filteredEpisodes = episodes.where((episode) {
+      return episode.title.toLowerCase().contains(_searchQuery);
+    }).toList();
+
+    // ترتيب الحلقات رقمياً
+    filteredEpisodes.sort((a, b) {
+      final aNum = _extractEpisodeNumber(a.title);
+      final bNum = _extractEpisodeNumber(b.title);
+
+      if (_sortDescending) {
+        return bNum.compareTo(aNum);
+      } else {
+        return aNum.compareTo(bNum);
+      }
+    });
+
+    // إضافة رسالة إذا لم يتم العثور على حلقات
+    if (filteredEpisodes.isEmpty) {
+      return Center(
+        child: Text(
+          'لا توجد حلقات متطابقة مع بحثك',
+          style: TextStyle(color: Colors.white),
+        ),
+      );
+    }
+
     return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: episodes.length,
+      itemCount: filteredEpisodes.length,
       itemBuilder: (context, index) {
-        final episode = episodes[index];
-        return InkWell(
-          onTap: () => _showServerOptions(context, episode),
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 0.0, vertical: 4),
-            child: Card(
-              color: _cardBackgroundColor,
-              elevation: 2,
-              child: SizedBox(
-                height: 120,
-                child: Row(
+        final episode = filteredEpisodes[index];
+        return _buildEpisodeCard(episode);
+      },
+    );
+  }
+
+  Widget _buildEpisodeCard(Episode episode) {
+    // تخطي الحلقات الفارغة فقط
+    if (episode.title.isEmpty) {
+      return SizedBox.shrink();
+    }
+
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: _cardBackgroundColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: _cardBorderColor, width: 1),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () async {
+          final scaffoldMessenger = ScaffoldMessenger.of(context);
+          scaffoldMessenger.showSnackBar(
+            SnackBar(content: Text('جاري تحميل الفيديو...')),
+          );
+
+          try {
+            final videoUrl = "https://files.vid3rb.com/files/0020250277/9f0a0e90-d904-44e7-998d-3ec5a7b16772/480p.mp4?e=1749057832&speed=600&t=NC13XmrRpcfavLrLfid1yw&noip=yes";
+
+            if (videoUrl == null || videoUrl.isEmpty) {
+              scaffoldMessenger.showSnackBar(
+                SnackBar(content: Text('تعذر العثور على رابط الفيديو')),
+              );
+              return;
+            }
+
+            if (!mounted) return;
+
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VideoPlayerScreen(
+                  videoUrl: videoUrl,
+                  episodeTitle: episode.title,
+                ),
+              ),
+            );
+          } catch (e) {
+            scaffoldMessenger.showSnackBar(
+              SnackBar(content: Text('حدث خطأ أثناء تحميل الفيديو')),
+            );
+          }
+        },
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: episode.thumbnail.isNotEmpty
+                    ? CachedNetworkImage(
+                  imageUrl: episode.thumbnail,
+                  width: 100,
+                  height: 60,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    width: 100,
+                    height: 60,
+                    color: _shimmerBaseColor,
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: 100,
+                    height: 60,
+                    color: _shimmerBaseColor,
+                    child: Icon(Icons.image, color: Colors.grey),
+                  ),
+                )
+                    : Container(
+                  width: 100,
+                  height: 60,
+                  color: _shimmerBaseColor,
+                  child: Icon(Icons.image, color: Colors.grey),
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(8),
-                        bottomLeft: Radius.circular(8),
+                    Text(
+                      episode.title,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
-                      child: CachedNetworkImage(
-                        imageUrl: episode.imageUrl,
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Shimmer.fromColors(
-                          baseColor: _shimmerBaseColor,
-                          highlightColor: _shimmerHighlightColor,
-                          child: Container(
-                            width: 120,
-                            height: 120,
-                            color: Colors.grey.shade800,
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          width: 120,
-                          height: 120,
-                          color: Colors.grey.shade800,
-                          child: const Icon(
-                            Icons.broken_image,
-                            color: Colors.grey,
-                            size: 40,
-                          ),
-                        ),
-                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 8,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              episode.title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.play_circle_fill,
-                                  color: Colors.blue,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'اضغط للمشاهدة',
-                                  style: TextStyle(
-                                    color: Colors.grey[400],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.only(left: 12),
-                      child: Icon(
-                        Icons.arrow_forward_ios,
-                        color: Colors.grey,
-                        size: 16,
+                    SizedBox(height: 4),
+                    Text(
+                      episode.duration,
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 14,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
+              Icon(
+                Icons.play_circle_outline,
+                color: Colors.white,
+                size: 30,
+              ),
+            ],
           ),
-        );
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDownloadAllButton() {
+    return FutureBuilder<String?>(
+      future: _futureDownloadUrl,
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data != null) {
+          return Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _downloadButtonColor,
+                padding: EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () {
+                // TODO: تنفيذ عملية التحميل
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.download, size: 24),
+                  SizedBox(width: 8),
+                  Text(
+                    'تحميل كل الحلقات',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return SizedBox.shrink();
       },
     );
   }

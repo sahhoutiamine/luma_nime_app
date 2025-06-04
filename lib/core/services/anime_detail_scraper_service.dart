@@ -10,110 +10,122 @@ class AnimeDetailScraper {
     }
     final document = parser.parse(response.body);
 
-    // استخراج البيانات الأساسية
-    final imageUrl = document.querySelector('.anime-card .image')?.attributes['data-src']?.trim() ?? '';
+    // استخراج الصورة الرئيسية مع تحسينات
+    final imageUrl = document.querySelector('img[alt*="صورة"]')?.attributes['src']?.trim() ??
+        document.querySelector('.poster img')?.attributes['src']?.trim() ??
+        document.querySelector('meta[property="og:image"]')?.attributes['content']?.trim() ?? '';
 
-    // متغير مساعد لاستخراج رابط البانر من الـ style
-    final bannerElementStyle = document.querySelector('.head-box .banner')?.attributes['style'];
-    String bannerUrlFromStyle = '';
-    if (bannerElementStyle != null && bannerElementStyle.contains('url("')) {
-      try {
-        // استخدام try-catch هنا لأن .split().elementAt() قد يسبب خطأ إذا لم تكن البنية كما هو متوقع
-        bannerUrlFromStyle = bannerElementStyle.split('url("').elementAt(1).split('")').first.trim();
-      } catch (e) {
-        // print('Error parsing banner URL from style: $e');
-        bannerUrlFromStyle = ''; // إعادة تعيين في حالة الخطأ
+    // استخراج العنوان الرئيسي
+    final titleElement = document.querySelector('h1');
+    String title = '';
+    String altTitle = '';
+
+    if (titleElement != null) {
+      final spanElement = titleElement.querySelector('span[dir="ltr"]');
+      if (spanElement != null) {
+        title = spanElement.text.trim();
+        // البحث عن العنوان البديل من النص المتبقي في h1
+        final fullText = titleElement.text.trim();
+        final remainingText = fullText.replaceFirst(title, '').trim();
+        if (remainingText.contains('(') && remainingText.contains(')')) {
+          altTitle = remainingText.replaceAll(RegExp(r'[()]'), '').trim();
+        }
+      } else {
+        title = titleElement.text.trim();
       }
     }
 
-    // السطر المصحح لـ bannerUrl
-    final bannerUrl = document.querySelector('.head-box .banner')?.attributes['data-src']?.trim() ??
-        (bannerUrlFromStyle.isNotEmpty ? bannerUrlFromStyle : imageUrl);
+    // استخراج الأنواع (الجانر) مع أخذ أول 4 أنواع وإزالة الأرقام
+    final genres = document.querySelectorAll('a[href*="/genre/"]')
+        .map((e) => e.text.trim().replaceAll(RegExp(r'\d'), ''))
+        .where((genre) => genre.isNotEmpty)
+        .take(4)
+        .toList();
 
-    final title = document.querySelector('.media-title h1')?.text.trim() ?? '';
-    final altTitle = document.querySelector('.media-title h3')?.text.trim() ?? '';
+    // استخراج التقييم
+    String rating = '0.0';
+    final ratingElements = document.querySelectorAll('p');
+    for (var element in ratingElements) {
+      final text = element.text.trim();
+      if (RegExp(r'^\d+\.\d+$').hasMatch(text)) {
+        rating = text;
+        break;
+      }
+    }
 
-    // استخراج المعلومات من قائمة media-info
-    final infoItems = document.querySelectorAll('.media-info li');
+    // استخراج المعلومات من الجداول
     Map<String, String> infoMap = {};
 
-    for (var item in infoItems) {
-      final label = item.text.split(':')[0].trim();
-      final value = item.querySelector('span')?.text.trim() ??
-          item.querySelector('a')?.text.trim() ??
-          item.text.split(':').sublist(1).join(':').trim();
-      infoMap[label] = value;
+    // البحث في الجدول المخفي للموبايل
+    final tableRows = document.querySelectorAll('table tr');
+    for (var row in tableRows) {
+      final cells = row.querySelectorAll('td');
+      if (cells.length >= 2) {
+        final key = cells[0].text.trim().replaceAll(':', '');
+        final value = cells[1].text.trim();
+        infoMap[key] = value;
+      }
     }
 
-    // استخراج التصنيف
-    final rating = document.querySelector('.score')?.text.trim() ?? '0.0';
+    // البحث في البطاقات الثلاث العلوية
+    final infoCards = document.querySelectorAll('.rounded-lg.border');
+    for (var card in infoCards) {
+      final labelElement = card.querySelector('p.font-light');
+      final valueElement = card.querySelector('p.text-lg');
+      if (labelElement != null && valueElement != null) {
+        final label = labelElement.text.trim();
+        final value = valueElement.text.trim();
+        infoMap[label] = value;
+      }
+    }
 
-    // استخراج الأنواع
-    final genres = document.querySelectorAll('.genres a').map((e) => e.text.trim()).toList();
+    // استخراج عدد الحلقات من النص
+    String episodes = infoMap['الحلقات'] ?? '1';
 
     // استخراج الوصف
-    final description = document.querySelector('.media-story .content')?.text.trim() ?? '';
-
-    // --- بداية منطق جلب المواسم المعدل ---
-    final List<String> currentScrapedSeasonImages = [];
-    final List<String> currentScrapedSeasonUrls = [];
-
-    final seasonLiElements = document.querySelectorAll('.media-seasons .episodes-lists li');
-
-    for (var liElement in seasonLiElements) {
-      final posterAnchor = liElement.querySelector('a.poster');
-      final seasonImage = posterAnchor?.attributes['data-src']?.trim() ?? '';
-
-      String seasonLink = '';
-      final readBtnAnchor = liElement.querySelector('a.read-btn');
-      seasonLink = readBtnAnchor?.attributes['href']?.trim() ?? '';
-
-      if (seasonLink.isEmpty) {
-        final titleAnchor = liElement.querySelector('a.title');
-        seasonLink = titleAnchor?.attributes['href']?.trim() ?? '';
-      }
-      if (seasonLink.isEmpty) {
-        seasonLink = posterAnchor?.attributes['href']?.trim() ?? '';
-      }
-
-      if (seasonImage.isNotEmpty && seasonLink.isNotEmpty) {
-        currentScrapedSeasonImages.add(seasonImage);
-        currentScrapedSeasonUrls.add(seasonLink);
+    final descriptionElements = document.querySelectorAll('p.leading-loose');
+    String description = '';
+    for (var element in descriptionElements) {
+      if (element.text.trim().isNotEmpty) {
+        if (description.isEmpty) {
+          description = element.text.trim();
+        } else {
+          description += '\n\n' + element.text.trim();
+        }
       }
     }
 
-    final List<String> finalSeasonImages;
-    final List<String> finalSeasonUrls;
+    // استخراج الأسماء البديلة
+    final altNames = document.querySelectorAll('h2.rounded')
+        .map((e) => e.text.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
 
-    if (currentScrapedSeasonImages.isNotEmpty) {
-      finalSeasonImages = currentScrapedSeasonImages;
-      finalSeasonUrls = currentScrapedSeasonUrls;
-    } else if (imageUrl.isNotEmpty) {
-      finalSeasonImages = [imageUrl];
-      finalSeasonUrls = [];
-    } else {
-      finalSeasonImages = [];
-      finalSeasonUrls = [];
+    if (altNames.isNotEmpty && altTitle.isEmpty) {
+      altTitle = altNames.join(' | ');
     }
-    // --- نهاية منطق جلب المواسم المعدل ---
+
+    // استخراج الاستديو
+    final studioElement = document.querySelector('a[href*="/c/studio/"]');
+    final studio = studioElement?.text.trim() ?? infoMap['الاستديو'] ?? '';
 
     return AnimeDetail(
       title: title,
       imageUrl: imageUrl,
-      bannerUrl: bannerUrl,
+      bannerUrl: imageUrl, // استخدام نفس صورة الأنمي كبنر
       status: infoMap['الحالة'] ?? '',
-      type: infoMap['النوع'] ?? 'TV',
-      releaseYear: infoMap['سنة العرض'] ?? infoMap['بداية العرض'] ?? '',
+      type: infoMap['النوع'] ?? 'مسلسل',
+      releaseYear: infoMap['إصدار'] ?? '',
       rating: rating,
-      studio: infoMap['الاستوديو'] ?? '',
+      studio: studio,
       duration: infoMap['المدة'] ?? infoMap['مدة الحلقة'] ?? '',
-      episodes: infoMap['الحلقات'] ?? '1',
+      episodes: episodes,
       genres: genres,
       description: description,
       altTitle: altTitle,
-      seasonsCount: finalSeasonImages.length,
-      seasonImages: finalSeasonImages,
-      seasonUrls: finalSeasonUrls,
+      seasonsCount: 0,
+      seasonImages: [],
+      seasonUrls: [],
     );
   }
 }

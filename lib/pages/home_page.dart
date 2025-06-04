@@ -25,18 +25,16 @@ class _HomePageState extends State<HomePage> {
 
   late Future<List<Anime>> _trendingAnimes;
   late Future<List<Anime>> _topRatedAnimes;
-  late Future<List<Anime>> _allAnimes;
   Anime? _featuredAnime;
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _trendingAnimes = _service.fetchAnimes(AnimeScraperService.trendingUrl);
+    _trendingAnimes = _service.fetchAnimes(AnimeScraperService.releaseDateUrl);
     _topRatedAnimes = _service.fetchAnimes(AnimeScraperService.ratingsUrl);
-    _allAnimes = _service.fetchAnimes(AnimeScraperService.allUrl);
 
-    _service.fetchAnimes(AnimeScraperService.trendingUrl).then((list) {
+    _service.fetchAnimes(AnimeScraperService.releaseDateUrl).then((list) {
       setState(() {
         _featuredAnime = (list..shuffle()).first;
       });
@@ -73,17 +71,12 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildAnimeSection("🔥 الأكثر شعبية", _trendingAnimes, AnimeScraperService.trendingUrl),
+                child: _buildAnimeSection("🔥 الأكثر شعبية", _trendingAnimes, AnimeScraperService.releaseDateUrl),
               ),
               const SizedBox(height: 25),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: _buildAnimeSection("🌟 الأعلى تقييماً", _topRatedAnimes, AnimeScraperService.ratingsUrl),
-              ),
-              const SizedBox(height: 25),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildAnimeSection("📚 كل الأنميات", _allAnimes, AnimeScraperService.allUrl),
               ),
               const SizedBox(height: 30),
             ]),

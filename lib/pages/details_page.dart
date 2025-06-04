@@ -13,6 +13,7 @@ const Color _cardBackgroundColor = Color(0xCA393939);
 const Color _cardBorderColor = Color(0xFF7C4CFE);
 const Color _shimmerBaseColor = Color(0xFF1E1E1E);
 const Color _shimmerHighlightColor = Color(0xFF2D2D2D);
+const Color _watchButtonColor = Color(0xFF4CAF50);
 
 class AnimeDetailPage extends StatefulWidget {
   final String url;
@@ -25,6 +26,7 @@ class AnimeDetailPage extends StatefulWidget {
 
 class _AnimeDetailPageState extends State<AnimeDetailPage> {
   late Future<AnimeDetail> _futureDetail;
+  bool _showFullDescription = false;
 
   @override
   void initState() {
@@ -37,8 +39,12 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
       case 'النوع': return Icons.merge_type_outlined;
       case 'الحلقات': return Icons.format_list_numbered_rtl_outlined;
       case 'المدة': return Icons.timer_outlined;
+      case 'إصدار':
       case 'سنة العرض': return Icons.calendar_today_outlined;
       case 'الاستوديو': return Icons.movie_creation_outlined;
+      case 'الحالة': return Icons.info_outline;
+      case 'التقييم': return Icons.star_outline;
+      case 'التصنيف العمري': return Icons.people_outline;
       default: return Icons.info_outline;
     }
   }
@@ -67,13 +73,16 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
     return CustomScrollView(
       slivers: [
         SliverAppBar(
-          expandedHeight: 250,
+          expandedHeight: 200,
           pinned: true,
-          flexibleSpace: Shimmer.fromColors(
-            baseColor: _shimmerBaseColor,
-            highlightColor: _shimmerHighlightColor,
-            child: Container(
-              color: Colors.grey.shade800,
+          backgroundColor: _appBarColor,
+          flexibleSpace: FlexibleSpaceBar(
+            background: Shimmer.fromColors(
+              baseColor: _shimmerBaseColor,
+              highlightColor: _shimmerHighlightColor,
+              child: Container(
+                color: Colors.grey.shade800,
+              ),
             ),
           ),
         ),
@@ -83,7 +92,6 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title Section Shimmer
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -142,26 +150,15 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
                   ],
                 ),
                 SizedBox(height: 24),
-                // Quick Info Shimmer
-                Shimmer.fromColors(
-                  baseColor: _shimmerBaseColor,
-                  highlightColor: _shimmerHighlightColor,
-                  child: Container(
-                    height: 20,
-                    width: 80,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-                SizedBox(height: 12),
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
-                  children: List.generate(5, (index) => Shimmer.fromColors(
+                  children: List.generate(6, (index) => Shimmer.fromColors(
                     baseColor: _shimmerBaseColor,
                     highlightColor: _shimmerHighlightColor,
                     child: Container(
-                      width: 100,
-                      height: 32,
+                      width: 120,
+                      height: 35,
                       decoration: BoxDecoration(
                         color: Colors.grey.shade800,
                         borderRadius: BorderRadius.circular(20),
@@ -170,17 +167,6 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
                   )),
                 ),
                 SizedBox(height: 24),
-                // Genres Shimmer
-                Shimmer.fromColors(
-                  baseColor: _shimmerBaseColor,
-                  highlightColor: _shimmerHighlightColor,
-                  child: Container(
-                    height: 20,
-                    width: 80,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-                SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -198,17 +184,6 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
                   )),
                 ),
                 SizedBox(height: 24),
-                // Description Shimmer
-                Shimmer.fromColors(
-                  baseColor: _shimmerBaseColor,
-                  highlightColor: _shimmerHighlightColor,
-                  child: Container(
-                    height: 20,
-                    width: 80,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-                SizedBox(height: 12),
                 Shimmer.fromColors(
                   baseColor: _shimmerBaseColor,
                   highlightColor: _shimmerHighlightColor,
@@ -220,37 +195,17 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
                     ),
                   ),
                 ),
-                SizedBox(height: 30),
-                // Seasons Shimmer
+                SizedBox(height: 24),
                 Shimmer.fromColors(
                   baseColor: _shimmerBaseColor,
                   highlightColor: _shimmerHighlightColor,
                   child: Container(
-                    height: 20,
-                    width: 80,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-                SizedBox(height: 12),
-                Container(
-                  height: 180,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: 3,
-                    itemBuilder: (context, index) {
-                      return Shimmer.fromColors(
-                        baseColor: _shimmerBaseColor,
-                        highlightColor: _shimmerHighlightColor,
-                        child: Container(
-                          width: 130,
-                          margin: EdgeInsets.only(right: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade800,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      );
-                    },
+                    height: 50,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade800,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ],
@@ -272,6 +227,15 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
             'حدث خطأ في جلب التفاصيل',
             style: TextStyle(color: Colors.white, fontSize: 18),
           ),
+          SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _futureDetail = AnimeDetailScraper.fetchDetails(widget.url);
+              });
+            },
+            child: Text('إعادة المحاولة'),
+          ),
         ],
       ),
     );
@@ -290,26 +254,26 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
 
   Widget _buildSliverAppBar(AnimeDetail anime) {
     return SliverAppBar(
-      expandedHeight: 250,
+      expandedHeight: 220,
       pinned: true,
       backgroundColor: _appBarColor,
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
-          fit: StackFit.expand,
           children: [
-            CachedNetworkImage(
-              imageUrl: anime.bannerUrl.isNotEmpty ? anime.bannerUrl : anime.imageUrl,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Shimmer.fromColors(
-                baseColor: _shimmerBaseColor,
-                highlightColor: _shimmerHighlightColor,
-                child: Container(color: _backgroundColor),
-              ),
-              errorWidget: (context, url, error) => Container(
-                color: _backgroundColor,
-                child: Icon(Icons.image_not_supported, color: Colors.grey, size: 48),
-              ),
+            Positioned.fill( // هذا سيجعل الصورة تأخذ كامل المساحة المتاحة
+              child: anime.bannerUrl.isNotEmpty
+                  ? CachedNetworkImage(
+                imageUrl: anime.bannerUrl,
+                fit: BoxFit.cover, // تغطي كامل المساحة مع الحفاظ على نسبة الأبعاد
+                placeholder: (context, url) => Container(color: _appBarColor),
+                errorWidget: (context, url, error) => Container(
+                  color: _appBarColor,
+                  child: Icon(Icons.image, color: Colors.grey),
+                ),
+              )
+                  : Container(color: _appBarColor),
             ),
+            // Gradient overlay at the bottom
             Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -363,12 +327,13 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
           SizedBox(height: 24),
           _buildQuickInfo(anime),
           SizedBox(height: 24),
-          _buildGenres(anime),
-          SizedBox(height: 24),
+          if (anime.genres.isNotEmpty) ...[
+            _buildGenres(anime),
+            SizedBox(height: 24),
+          ],
           _buildDescription(anime),
-          SizedBox(height: 30),
-          _buildSeasonsSection(anime),
-          SizedBox(height: 20),
+          SizedBox(height: 24),
+          _buildWatchButton(anime),
         ],
       ),
     );
@@ -378,109 +343,163 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-      Container(
-      width: 100,
-      height: 140,
-      decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(128),
-              blurRadius: 10,
-              offset: Offset(0, 6),
+        Container(
+          width: 100,
+          height: 140,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(128),
+                blurRadius: 10,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: anime.imageUrl.isNotEmpty
+                ? CachedNetworkImage(
+              imageUrl: anime.imageUrl,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Shimmer.fromColors(
+                baseColor: _shimmerBaseColor,
+                highlightColor: _shimmerHighlightColor,
+                child: Container(color: _cardBackgroundColor),
+              ),
+              errorWidget: (context, url, error) => Container(
+                color: _cardBackgroundColor,
+                child: Icon(Icons.image, color: Colors.grey),
+              ),
+            )
+                : Container(
+              color: _cardBackgroundColor,
+              child: Icon(Icons.image, color: Colors.grey, size: 32),
+            ),
+          ),
+        ),
+        SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                anime.title,
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (anime.altTitle.isNotEmpty) ...[
+                SizedBox(height: 4),
+                Text(
+                  anime.altTitle,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[400],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              SizedBox(height: 12),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _ratingColor,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _ratingColor.withAlpha(153),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.star, color: Colors.black87, size: 18),
+                    SizedBox(width: 5),
+                    Text(
+                      anime.rating,
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWatchButton(AnimeDetail anime) {
+    return Container(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: () {
+          String episodesUrl = widget.url;
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => SeasonEpisodesPage(
+                seasonTitle: 'حلقات ${anime.title}',
+                seasonUrl: episodesUrl,
+              ),
+            ),
+          );
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _watchButtonColor,
+          foregroundColor: Colors.white,
+          elevation: 8,
+          shadowColor: _watchButtonColor.withAlpha(128),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.play_arrow, size: 24),
+            SizedBox(width: 8),
+            Text(
+              'مشاهدة الأنمي',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
+        ),
       ),
-    child: ClipRRect(
-    borderRadius: BorderRadius.circular(8),
-    child: CachedNetworkImage(
-    imageUrl: anime.imageUrl,
-    fit: BoxFit.cover,
-    placeholder: (context, url) => Shimmer.fromColors(
-    baseColor: _shimmerBaseColor,
-    highlightColor: _shimmerHighlightColor,
-    child: Container(color: _cardBackgroundColor),
-    ),
-    errorWidget: (context, url, error) => Container(
-    color: _cardBackgroundColor,
-    child: Icon(Icons.image, color: Colors.grey),
-    ),
-    ),
-    ),
-    ),
-    SizedBox(width: 16),
-    Expanded(
-    child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-    Text(
-    anime.title,
-    style: TextStyle(
-    fontSize: 20,
-    fontWeight: FontWeight.bold,
-    color: Colors.white,
-    ),
-    maxLines: 3,
-    overflow: TextOverflow.ellipsis,
-    ),
-    if (anime.altTitle.isNotEmpty) ...[
-    SizedBox(height: 4),
-    Text(
-    anime.altTitle,
-    style: TextStyle(
-    fontSize: 14,
-    color: Colors.grey[400],
-    ),
-    maxLines: 2,
-    overflow: TextOverflow.ellipsis,
-    ),
-    ],
-    SizedBox(height: 12),
-    Container(
-    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(
-    color: _ratingColor,
-    borderRadius: BorderRadius.circular(12),
-    boxShadow: [
-    BoxShadow(
-    color: _ratingColor.withAlpha(153),
-    blurRadius: 10,
-    spreadRadius: 1,
-    offset: Offset(0, 2),
-    ),
-    ],
-    ),
-    child: Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-    Icon(Icons.star, color: Colors.black87, size: 18),
-    SizedBox(width: 5),
-    Text(
-    anime.rating,
-    style: TextStyle(
-    color: Colors.black87,
-    fontSize: 14,
-    fontWeight: FontWeight.bold,
-    ),
-    ),
-    ],
-    ),
-    ),
-    ],
-    ),
-    ),
-    ],
     );
   }
 
   Widget _buildQuickInfo(AnimeDetail anime) {
     final infos = [
-      {'label': 'النوع', 'value': anime.type},
-      {'label': 'الحلقات', 'value': anime.episodes},
-      {'label': 'المدة', 'value': anime.duration},
-      {'label': 'سنة العرض', 'value': anime.releaseYear},
+      if (anime.type.isNotEmpty) {'label': 'النوع', 'value': anime.type},
+      if (anime.episodes.isNotEmpty) {'label': 'الحلقات', 'value': anime.episodes},
+      if (anime.duration.isNotEmpty) {'label': 'المدة', 'value': anime.duration},
+      if (anime.releaseYear.isNotEmpty) {'label': 'إصدار', 'value': anime.releaseYear},
       if (anime.studio.isNotEmpty) {'label': 'الاستوديو', 'value': anime.studio},
+      if (anime.status.isNotEmpty) {'label': 'الحالة', 'value': anime.status},
     ];
+
+    if (infos.isEmpty) {
+      return SizedBox.shrink();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -501,7 +520,7 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
             String label = info['label'] as String;
             String value = info['value'] as String;
             return Container(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: _cardBackgroundColor,
                 borderRadius: BorderRadius.circular(20),
@@ -510,8 +529,8 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(_getIconForInfo(label), color: _titleAndGenreColor, size: 15),
-                  SizedBox(width: 6),
+                  Icon(_getIconForInfo(label), color: _titleAndGenreColor, size: 16),
+                  SizedBox(width: 8),
                   RichText(
                     text: TextSpan(
                       style: TextStyle(fontSize: 13, fontFamily: Theme.of(context).textTheme.bodyLarge?.fontFamily),
@@ -531,6 +550,8 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
   }
 
   Widget _buildGenres(AnimeDetail anime) {
+    final displayedGenres = anime.genres.take(4).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -546,9 +567,9 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: anime.genres
+          children: displayedGenres
               .map((genre) => Container(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: 5),
             decoration: BoxDecoration(
               color: _titleAndGenreColor.withAlpha(38),
               borderRadius: BorderRadius.circular(16),
@@ -556,9 +577,10 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
             ),
             child: Text(
               genre,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 13,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -570,6 +592,13 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
   }
 
   Widget _buildDescription(AnimeDetail anime) {
+    final description = anime.description.isNotEmpty ? anime.description : 'لا يوجد وصف متوفر حالياً.';
+    final shortDescription = _showFullDescription
+        ? description
+        : (description.length > 150
+        ? '${description.substring(0, 150)}...'
+        : description);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -589,202 +618,38 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: _cardBorderColor.withAlpha(179), width: 1),
           ),
-          child: Text(
-            anime.description.isNotEmpty ? anime.description : 'لا يوجد وصف متوفر حالياً.',
-            style: TextStyle(
-              color: Colors.white.withAlpha(217),
-              fontSize: 15,
-              height: 1.6,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSeasonsSection(AnimeDetail anime) {
-    if (anime.seasonImages.isEmpty) {
-      return Container(
-        padding: EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Color(0xFF2A2A2A),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Color(0xFF404040), width: 1),
-        ),
-        child: Column(
-          children: [
-            Icon(Icons.movie_outlined, color: Colors.grey, size: 32),
-            SizedBox(height: 8),
-            Text(
-              'لا توجد مواسم متاحة',
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'المواسم',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(width: 8),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: _titleAndGenreColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '${anime.seasonImages.length}',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                shortDescription,
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+                  color: Colors.white.withAlpha(217),
+                  fontSize: 15,
+                  height: 1.6,
                 ),
               ),
-            ),
-          ],
-        ),
-        SizedBox(height: 12),
-        Container(
-          height: 235,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: anime.seasonImages.length,
-            itemBuilder: (context, index) {
-              return _buildSeasonCard(anime, index);
-            },
+              if (description.length > 150) ...[
+                SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _showFullDescription = !_showFullDescription;
+                    });
+                  },
+                  child: Text(
+                    _showFullDescription ? 'عرض أقل' : 'عرض المزيد',
+                    style: TextStyle(
+                      color: _titleAndGenreColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSeasonCard(AnimeDetail anime, int index) {
-    final hasValidUrl = index < anime.seasonUrls.length &&
-        anime.seasonUrls[index].isNotEmpty;
-
-    return Container(
-      width: 130,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 5),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: hasValidUrl ? () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SeasonEpisodesPage(
-                      seasonTitle: 'الموسم ${index + 1}',
-                      seasonUrl: anime.seasonUrls[index],
-                    ),
-                  ),
-                );
-              } : null,
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                height: 160,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: hasValidUrl ? _cardBorderColor : Color(0xFF404040),
-                    width: 1,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CachedNetworkImage(
-                        imageUrl: anime.seasonImages[index],
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Shimmer.fromColors(
-                          baseColor: _shimmerBaseColor,
-                          highlightColor: _shimmerHighlightColor,
-                          child: Container(color: Color(0xFF2A2A2A)),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Color(0xFF2A2A2A),
-                          child: Icon(Icons.image, color: Colors.grey),
-                        ),
-                      ),
-                      if (!hasValidUrl)
-                        Container(
-                          color: Colors.black54,
-                          child: Center(
-                            child: Icon(
-                              Icons.lock,
-                              color: Colors.grey,
-                              size: 24,
-                            ),
-                          ),
-                        ),
-                      if (hasValidUrl)
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: Container(
-                            padding: EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: _titleAndGenreColor,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              Icons.play_arrow,
-                              color: Colors.white,
-                              size: 12,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(height: 8),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'الموسم ${index + 1}',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    hasValidUrl ? 'متاح' : 'غير متاح',
-                    style: TextStyle(
-                      color: hasValidUrl ? Color(0xFF4CAF50) : Colors.grey,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

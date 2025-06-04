@@ -1,17 +1,32 @@
 class Episode {
   final String title;
-  final String number;
-  final String imageUrl;
   final String url;
-  final String? duration;
-  final String? date;
+  final String thumbnail;
+  final String duration;
+  final bool isLastEpisode;
 
-  Episode({
+  const Episode({
     required this.title,
-    required this.number,
-    required this.imageUrl,
     required this.url,
-    this.duration,
-    this.date,
+    required this.thumbnail,
+    required this.duration,
+    required this.isLastEpisode,
   });
+
+  // إضافة دالة copyWith لإنشاء نسخة معدلة من الحلقة
+  Episode copyWith({
+    String? title,
+    String? url,
+    String? thumbnail,
+    String? duration,
+    bool? isLastEpisode,
+  }) {
+    return Episode(
+      title: title ?? this.title,
+      url: url ?? this.url,
+      thumbnail: thumbnail ?? this.thumbnail,
+      duration: duration ?? this.duration,
+      isLastEpisode: isLastEpisode ?? this.isLastEpisode,
+    );
+  }
 }
