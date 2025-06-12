@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:luma_nome_app/Sign-in-up/login_page.dart';
 import 'package:luma_nome_app/pages/home_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends StatefulWidget {
   @override
@@ -14,13 +16,25 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigateToHome() async {
+    // الانتظار لمدة 3 ثواني
     await Future.delayed(Duration(seconds: 3));
 
     try {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => HomePage()),
-      );
+      final prefs = await SharedPreferences.getInstance();
+      bool? isLoggedIn = prefs.getBool('isUserLoggedIn');
+
+      // إذا كان المستخدم مسجل دخوله
+      if (isLoggedIn != null && isLoggedIn) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => HomePage()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginPage()),
+        );
+      }
     } catch (e) {
       print('حدث خطأ في الانتقال: $e');
       showDialog(
@@ -40,24 +54,16 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Widget _buildLogo() {
-    try {
-      return Image.asset(
-        'assets/logo_tr.png',
-        width: 150,
-        height: 150,
-        errorBuilder: (context, error, stackTrace) => Icon(
-          Icons.movie,
-          size: 150,
-          color: Colors.white,
-        ),
-      );
-    } catch (e) {
-      return Icon(
+    return Image.asset(
+      'assets/logo_tr.png',
+      width: 150,
+      height: 150,
+      errorBuilder: (context, error, stackTrace) => Icon(
         Icons.movie,
         size: 150,
         color: Colors.white,
-      );
-    }
+      ),
+    );
   }
 
   @override

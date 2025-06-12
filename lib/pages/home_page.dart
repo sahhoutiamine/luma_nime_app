@@ -1,6 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:luma_nome_app/Sign-in-up/login_page.dart';
+import 'package:luma_nome_app/services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart' show SharedPreferences;
 import 'package:shimmer/shimmer.dart';
 import 'details_page.dart';
 import 'package:luma_nome_app/core/models/anime.dart';
@@ -41,6 +44,28 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  void logout(BuildContext context) async {
+    final _firebaseAuth = AuthService();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      prefs.setBool('isUserLoggedIn', false);
+      await _firebaseAuth.signOut();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginPage()),
+      );
+    } catch (e) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Logout Failed"),
+          content: Text(e.toString()),
+        ),
+      );
+    }
+  }
+
+
   @override
   void dispose() {
     _scrollController.dispose();
@@ -55,17 +80,27 @@ class _HomePageState extends State<HomePage> {
         controller: _scrollController,
         slivers: [
           SliverAppBar(
-            pinned: true,
-            floating: true,
-            expandedHeight: 480,
-            flexibleSpace: FlexibleSpaceBar(
-              background: _buildFeaturedAnimeBanner(),
-            ),
-            backgroundColor: _backgroundColor,
-            elevation: 0,
-            title: _buildSearchBar(),
-            centerTitle: true,
-          ),
+  pinned: true,
+  floating: true,
+  expandedHeight: 480,
+  flexibleSpace: FlexibleSpaceBar(
+    background: _buildFeaturedAnimeBanner(),
+  ),
+  backgroundColor: _backgroundColor,
+  elevation: 0,
+  title: _buildSearchBar(),
+  centerTitle: true,
+  actions: [
+    IconButton(
+      icon: const Icon(Icons.logout, color: Colors.white),
+      tooltip: 'تسجيل الخروج',
+      onPressed: () {
+       logout(context);
+      },
+    ),
+  ],
+),
+
           SliverList(
             delegate: SliverChildListDelegate([
               const SizedBox(height: 16),
